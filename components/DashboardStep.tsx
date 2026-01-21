@@ -27,6 +27,7 @@ const DashboardStep: React.FC<DashboardStepProps> = ({ session }) => {
   const [failedImages, setFailedImages] = useState<Record<number, boolean>>({});
   const imageRequestRef = useRef<Set<number>>(new Set());
   const lastAttractionKeyRef = useRef('');
+  const failedRetryRef = useRef<Set<string>>(new Set());
   
   // Itinerary State
   const [itinerary, setItinerary] = useState<string>('');
@@ -128,13 +129,12 @@ const DashboardStep: React.FC<DashboardStepProps> = ({ session }) => {
              const cached = localStorage.getItem(cacheKey);
              if (cached) {
                  if (cached === 'FAILED') {
-                     const retryKey = `guest-companion:attraction-retry:${session.booking.location}:${attr.type}:${attr.name}`;
-                     const alreadyRetried = sessionStorage.getItem(retryKey);
-                      if (alreadyRetried) {
-                          setFailedImages(prev => ({...prev, [attr.id]: true}));
-                          continue;
-                      }
-                     sessionStorage.setItem(retryKey, '1');
+                     const retryKey = `${session.booking.location}:${attr.type}:${attr.name}`;
+                     if (failedRetryRef.current.has(retryKey)) {
+                         setFailedImages(prev => ({...prev, [attr.id]: true}));
+                         continue;
+                     }
+                     failedRetryRef.current.add(retryKey);
                  } else {
                      setGeneratedImages(prev => ({...prev, [attr.id]: cached}));
                      await setImageCache(cacheKey, cached);
@@ -332,7 +332,7 @@ const DashboardStep: React.FC<DashboardStepProps> = ({ session }) => {
                 <h1 className="text-primary text-[10px] font-bold tracking-widest uppercase mb-0.5">
                     Concierge
                 </h1>
-                <p className="text-slate-900 text-xs font-bold truncate max-w-[150px]">
+                <p className="text-slate-900 text-xs font-bold truncate max-w-[220px]">
                     {session.booking.hotelName}
                 </p>
             </div>
