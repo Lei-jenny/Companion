@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { UserSession } from '../types';
 import { generateSouvenirCaption, generatePostcardImage } from '../services/geminiService';
+import { getImageCache, setImageCache } from '../services/cacheService';
 
 interface SouvenirStepProps {
   session: UserSession;
@@ -19,18 +20,15 @@ const SouvenirStep: React.FC<SouvenirStepProps> = ({ session }) => {
 
     const fetchContent = async () => {
         setLoading(true);
-        const cacheKey = `guest-companion:postcard:${session.booking.orderId}`;
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-            try {
-                const parsed = JSON.parse(cached);
-                if (parsed?.caption) setCaption(parsed.caption);
-                if (parsed?.image) setPostcardImage(parsed.image);
-                setLoading(false);
-                return;
-            } catch {
-                // Ignore cache parsing issues
-            }
+        const captionKey = `guest-companion:postcard-caption:${session.booking.orderId}`;
+        const imageKey = `guest-companion:postcard-image:${session.booking.orderId}`;
+        const cachedCaption = localStorage.getItem(captionKey);
+        const cachedImage = await getImageCache(imageKey);
+        if (cachedCaption || cachedImage) {
+            if (cachedCaption) setCaption(cachedCaption);
+            if (cachedImage) setPostcardImage(cachedImage);
+            setLoading(false);
+            return;
         }
 
         // Parallel generation for speed
@@ -43,7 +41,10 @@ const SouvenirStep: React.FC<SouvenirStepProps> = ({ session }) => {
         setPostcardImage(image);
         setLoading(false);
 
-        localStorage.setItem(cacheKey, JSON.stringify({ caption: text, image }));
+        localStorage.setItem(captionKey, text);
+        if (image) {
+            await setImageCache(imageKey, image);
+        }
     };
     fetchContent();
   }, [session]);
