@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { TravelStyle, Booking, TripStatus, UserSession } from '../types';
 import { validateUser, getTripStatus, PRESET_AVATARS, MOCK_BOOKINGS } from '../services/mockService';
 import { generateAvatar, setGeminiApiKey, setImageApiKey } from '../services/geminiService';
+import { getImageCache, setImageCache } from '../services/cacheService';
 
 interface LoginStepProps {
   onLoginSuccess: (session: UserSession) => void;
@@ -49,8 +50,8 @@ const LoginStep: React.FC<LoginStepProps> = ({ onLoginSuccess }) => {
   const handleGenerateAIAvatar = async () => {
     setIsGenerating(true);
     const cacheKey = `guest-companion:avatar:${selectedStyle.toLowerCase()}`;
-    const cached = localStorage.getItem(cacheKey);
-    if (cached && cached !== 'FAILED') {
+    const cached = await getImageCache(cacheKey);
+    if (cached) {
       setAvatar(cached);
       setIsGenerating(false);
       return;
@@ -59,10 +60,9 @@ const LoginStep: React.FC<LoginStepProps> = ({ onLoginSuccess }) => {
     const aiAvatar = await generateAvatar(selectedStyle);
     if (aiAvatar) {
         setAvatar(aiAvatar);
-        localStorage.setItem(cacheKey, aiAvatar);
+        await setImageCache(cacheKey, aiAvatar);
     } else {
         setError("Could not generate AI avatar. Please select a preset.");
-        localStorage.setItem(cacheKey, 'FAILED');
     }
     setIsGenerating(false);
   };
