@@ -7,6 +7,19 @@ let ai: GoogleGenAI | null = null;
 const IMAGE_API_URL = 'https://ai.juguang.chat/v1beta/models/gemini-2.5-flash-image-preview:generateContent';
 const imageInFlight = new Map<string, Promise<string | null>>();
 const imageResultCache = new Map<string, string | null>();
+const bingInFlight = new Map<string, Promise<string | null>>();
+const bingResultCache = new Map<string, string | null>();
+
+const hashString = (value: string) => {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return `h${Math.abs(hash)}`;
+};
+
+const getRequestKey = (prompt: string) => `guest-companion:image-requested:${hashString(prompt)}`;
 
 export const setGeminiApiKey = (key: string) => {
   apiKey = key.trim();
@@ -37,6 +50,13 @@ const generateImageFromPrompt = async (prompt: string): Promise<string | null> =
   }
   if (imageInFlight.has(cacheKey)) {
     return imageInFlight.get(cacheKey) ?? null;
+  }
+  if (typeof sessionStorage !== 'undefined') {
+    const requestKey = getRequestKey(cacheKey);
+    if (sessionStorage.getItem(requestKey)) {
+      return null;
+    }
+    sessionStorage.setItem(requestKey, '1');
   }
 
   const requestBody = {
@@ -91,6 +111,44 @@ const generateImageFromPrompt = async (prompt: string): Promise<string | null> =
     return result;
   } finally {
     imageInFlight.delete(cacheKey);
+  }
+};
+
+const fetchBingImage = async (query: string): Promise<string | null> => {
+  const cacheKey = query.trim();
+  if (bingResultCache.has(cacheKey)) {
+    return bingResultCache.get(cacheKey) ?? null;
+  }
+  if (bingInFlight.has(cacheKey)) {
+    return bingInFlight.get(cacheKey) ?? null;
+  }
+
+  const task = (async () => {
+    try {
+      const url = `https://r.jina.ai/http://www.bing.com/images/search?q=${encodeURIComponent(query)}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        return null;
+      }
+      const html = await response.text();
+      const match = html.match(/murl&quot;:&quot;([^&]+)&quot;/i) || html.match(/murl":"([^"]+)"/i);
+      if (match?.[1]) {
+        return decodeURIComponent(match[1]);
+      }
+      return null;
+    } catch (error) {
+      console.error('Bing image fetch failed:', error);
+      return null;
+    }
+  })();
+
+  bingInFlight.set(cacheKey, task);
+  try {
+    const result = await task;
+    bingResultCache.set(cacheKey, result);
+    return result;
+  } finally {
+    bingInFlight.delete(cacheKey);
   }
 };
 
@@ -199,7 +257,9 @@ export const generateAvatar = async (style: TravelStyle): Promise<string | null>
 
 // "Nano Banana" - Attraction 3D Asset Generation
 export const generateAttractionImage = async (type: string, name: string): Promise<string | null> => {
-    if (!apiKey) return null;
+    if (!apiKey && !imageApiKey) {
+        return fetchBingImage(`${name} ${type}`);
+    }
 
     try {
         const client = getClient();
@@ -212,10 +272,12 @@ export const generateAttractionImage = async (type: string, name: string): Promi
             Minimalist, single object.
         `;
 
-        return await generateImageFromPrompt(prompt);
+        const image = await generateImageFromPrompt(prompt);
+        if (image) return image;
+        return await fetchBingImage(`${name} ${type}`);
     } catch (error) {
         console.error("Attraction Image Gen Error:", error);
-        return null;
+        return await fetchBingImage(`${name} ${type}`);
     }
 }
 
