@@ -5,6 +5,8 @@ let apiKey = '';
 let imageApiKey = '';
 let ai: GoogleGenAI | null = null;
 const IMAGE_API_URL = 'https://ai.juguang.chat/v1beta/models/gemini-2.5-flash-image-preview:generateContent';
+const imageInFlight = new Map<string, Promise<string | null>>();
+const imageResultCache = new Map<string, string | null>();
 
 export const setGeminiApiKey = (key: string) => {
   apiKey = key.trim();
@@ -29,6 +31,13 @@ const extractImageFromResponse = (response: any): string | null => {
 
 const generateImageFromPrompt = async (prompt: string): Promise<string | null> => {
   if (!imageApiKey) return null;
+  const cacheKey = prompt.trim();
+  if (imageResultCache.has(cacheKey)) {
+    return imageResultCache.get(cacheKey) ?? null;
+  }
+  if (imageInFlight.has(cacheKey)) {
+    return imageInFlight.get(cacheKey) ?? null;
+  }
 
   const requestBody = {
     contents: [
@@ -44,33 +53,44 @@ const generateImageFromPrompt = async (prompt: string): Promise<string | null> =
     }
   };
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000);
+  const task = (async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-  try {
-    const response = await fetch(IMAGE_API_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${imageApiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal
-    });
+    try {
+      const response = await fetch(IMAGE_API_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${imageApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Image Gen Error:", response.status, errorText);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Image Gen Error:", response.status, errorText);
+        return null;
+      }
+
+      const data = await response.json();
+      return extractImageFromResponse(data);
+    } catch (error) {
+      console.error("Image Gen Error:", error);
       return null;
+    } finally {
+      clearTimeout(timeoutId);
     }
+  })();
 
-    const data = await response.json();
-    return extractImageFromResponse(data);
-  } catch (error) {
-    console.error("Image Gen Error:", error);
-    return null;
+  imageInFlight.set(cacheKey, task);
+  try {
+    const result = await task;
+    imageResultCache.set(cacheKey, result);
+    return result;
   } finally {
-    clearTimeout(timeoutId);
+    imageInFlight.delete(cacheKey);
   }
 };
 
