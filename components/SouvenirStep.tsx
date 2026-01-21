@@ -106,7 +106,10 @@ const SouvenirStep: React.FC<SouvenirStepProps> = ({ session }) => {
             <div className="flex flex-col items-center select-none opacity-80">
                 <img src={HILTON_LOGO} alt="Hilton" className="h-6 object-contain" />
             </div>
-            <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 text-slate-800 transition-colors">
+            <button
+                onClick={handleShare}
+                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 text-slate-800 transition-colors"
+            >
                 <span className="material-symbols-outlined">ios_share</span>
             </button>
         </header>
@@ -232,13 +235,6 @@ const SouvenirStep: React.FC<SouvenirStepProps> = ({ session }) => {
                     <span className="relative z-10">Save to Photos</span>
                  </button>
              </div>
-             <button
-                 className="w-full h-12 rounded-2xl border border-slate-200 text-slate-900 font-bold text-sm flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"
-                 onClick={handleShare}
-             >
-                 <span className="material-symbols-outlined text-sm">ios_share</span>
-                 <span>Share</span>
-             </button>
         </footer>
     </div>
   );
