@@ -217,10 +217,11 @@ export const generatePostcardImage = async (
         const client = getClient();
         if (!client) return null;
         const prompt = `
-            A beautiful, artistic travel poster illustration of ${hotelName} in ${location}.
-            Style: ${style} vibe, high-end digital art, warm lighting, scenic view. 
-            The image should look like a premium collectible postcard.
-            No text overlay.
+            A realistic travel photo taken at ${hotelName} in ${location}.
+            Style: ${style} traveler vibe, warm natural lighting, candid moment, modern luxury atmosphere.
+            Include details like lobby ambiance or a scenic hotel exterior with people in the background.
+            Photorealistic, high-end travel photography.
+            No text, no illustration, no watermarks.
         `;
 
         return await generateImageFromPrompt(prompt);
