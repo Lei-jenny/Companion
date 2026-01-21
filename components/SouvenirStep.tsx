@@ -11,6 +11,7 @@ const SouvenirStep: React.FC<SouvenirStepProps> = ({ session }) => {
   const [caption, setCaption] = useState('');
   const [postcardImage, setPostcardImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [imageFailed, setImageFailed] = useState(false);
   const HILTON_LOGO = "https://www.hilton.com/modules/assets/svgs/logos/WW.svg";
   const hasFetchedRef = useRef(false);
 
@@ -22,11 +23,19 @@ const SouvenirStep: React.FC<SouvenirStepProps> = ({ session }) => {
         setLoading(true);
         const captionKey = `guest-companion:postcard-caption:${session.booking.orderId}`;
         const imageKey = `guest-companion:postcard-image:${session.booking.orderId}`;
+        const failedKey = `guest-companion:postcard-image-failed:${session.booking.orderId}`;
         const cachedCaption = localStorage.getItem(captionKey);
         const cachedImage = await getImageCache(imageKey);
+        const failedFlag = localStorage.getItem(failedKey);
         if (cachedCaption || cachedImage) {
             if (cachedCaption) setCaption(cachedCaption);
             if (cachedImage) setPostcardImage(cachedImage);
+            if (failedFlag && !cachedImage) setImageFailed(true);
+            setLoading(false);
+            return;
+        }
+        if (failedFlag) {
+            setImageFailed(true);
             setLoading(false);
             return;
         }
@@ -44,10 +53,31 @@ const SouvenirStep: React.FC<SouvenirStepProps> = ({ session }) => {
         localStorage.setItem(captionKey, text);
         if (image) {
             await setImageCache(imageKey, image);
+        } else {
+            setImageFailed(true);
+            localStorage.setItem(failedKey, '1');
         }
     };
     fetchContent();
   }, [session]);
+
+  const handleRetryImage = async () => {
+    setLoading(true);
+    setImageFailed(false);
+    const imageKey = `guest-companion:postcard-image:${session.booking.orderId}`;
+    const failedKey = `guest-companion:postcard-image-failed:${session.booking.orderId}`;
+    localStorage.removeItem(failedKey);
+
+    const image = await generatePostcardImage(session.booking.hotelName, session.booking.location, session.travelStyle);
+    setPostcardImage(image);
+    setLoading(false);
+    if (image) {
+        await setImageCache(imageKey, image);
+    } else {
+        setImageFailed(true);
+        localStorage.setItem(failedKey, '1');
+    }
+  };
 
   return (
     <div className="relative w-full max-w-[420px] h-[100dvh] sm:h-[850px] bg-background-light sm:bg-white sm:rounded-3xl sm:shadow-2xl flex flex-col overflow-hidden transition-all duration-300">
@@ -81,6 +111,17 @@ const SouvenirStep: React.FC<SouvenirStepProps> = ({ session }) => {
                          </div>
                          <span className="text-xs uppercase tracking-[0.2em] font-bold text-primary animate-pulse">Developing Memory</span>
                          <span className="text-[10px] text-gray-400 mt-2">Crafting your unique souvenir...</span>
+                    </div>
+                ) : imageFailed ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 text-gray-500 z-20">
+                        <span className="material-symbols-outlined text-4xl mb-3">image_not_supported</span>
+                        <p className="text-xs font-bold uppercase tracking-widest">Image unavailable</p>
+                        <button
+                            onClick={handleRetryImage}
+                            className="mt-4 px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-bold uppercase tracking-wider"
+                        >
+                            Retry Image
+                        </button>
                     </div>
                 ) : (
                     <>
