@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { UserSession, Attraction } from '../types';
 import { MOCK_ATTRACTIONS } from '../services/mockService';
 import { generateConciergeInfo, chatWithConcierge, generateItinerary, generateAttractionImage, generateDynamicAttractions } from '../services/geminiService';
+import { getImageCache, setImageCache } from '../services/cacheService';
 import ReactMarkdown from 'react-markdown';
 
 interface DashboardStepProps {
@@ -117,10 +118,10 @@ const DashboardStep: React.FC<DashboardStepProps> = ({ session }) => {
     lastAttractionKeyRef.current = attractionKey;
 
     const fetchImages = async () => {
-        attractions.forEach(async (attr) => {
+        for (const attr of attractions) {
              // If we already generated, failed, or have a URL, skip
-             if (generatedImages[attr.id] || failedImages[attr.id] || attr.imageUrl) return;
-             if (imageRequestRef.current.has(attr.id)) return;
+             if (generatedImages[attr.id] || failedImages[attr.id] || attr.imageUrl) continue;
+             if (imageRequestRef.current.has(attr.id)) continue;
 
              // Check local cache
              const cacheKey = `guest-companion:attraction-image:${session.booking.location}:${attr.type}:${attr.name}`;
@@ -129,27 +130,35 @@ const DashboardStep: React.FC<DashboardStepProps> = ({ session }) => {
                  if (cached === 'FAILED') {
                      const retryKey = `guest-companion:attraction-retry:${session.booking.location}:${attr.type}:${attr.name}`;
                      const alreadyRetried = sessionStorage.getItem(retryKey);
-                     if (alreadyRetried) {
-                         setFailedImages(prev => ({...prev, [attr.id]: true}));
-                         return;
-                     }
+                      if (alreadyRetried) {
+                          setFailedImages(prev => ({...prev, [attr.id]: true}));
+                          continue;
+                      }
                      sessionStorage.setItem(retryKey, '1');
                  } else {
                      setGeneratedImages(prev => ({...prev, [attr.id]: cached}));
-                     return;
+                     await setImageCache(cacheKey, cached);
+                     localStorage.removeItem(cacheKey);
+                      continue;
                  }
+             }
+
+             const cachedImage = await getImageCache(cacheKey);
+             if (cachedImage) {
+                 setGeneratedImages(prev => ({...prev, [attr.id]: cachedImage}));
+                 continue;
              }
 
              imageRequestRef.current.add(attr.id);
              const img = await generateAttractionImage(attr.type, attr.name);
              if (img) {
                  setGeneratedImages(prev => ({...prev, [attr.id]: img}));
-                 localStorage.setItem(cacheKey, img);
+                 await setImageCache(cacheKey, img);
              } else {
                  setFailedImages(prev => ({...prev, [attr.id]: true}));
                  localStorage.setItem(cacheKey, 'FAILED');
              }
-        });
+        }
     };
     fetchImages();
   }, [attractions]);
