@@ -27,36 +27,19 @@ const SouvenirStep: React.FC<SouvenirStepProps> = ({ session }) => {
         const cachedCaption = localStorage.getItem(captionKey);
         const cachedImage = await getImageCache(imageKey);
         const failedFlag = localStorage.getItem(failedKey);
-        if (cachedCaption || cachedImage) {
-            if (cachedCaption) setCaption(cachedCaption);
-            if (cachedImage) setPostcardImage(cachedImage);
-            if (failedFlag && !cachedImage) setImageFailed(true);
-            setLoading(false);
-            return;
-        }
-        if (failedFlag) {
-            setImageFailed(true);
+        if (cachedCaption) setCaption(cachedCaption);
+        if (cachedImage) setPostcardImage(cachedImage);
+        if (failedFlag && !cachedImage) setImageFailed(true);
+        if (cachedCaption || cachedImage || failedFlag) {
             setLoading(false);
             return;
         }
 
-        // Parallel generation for speed
-        const [text, image] = await Promise.all([
-            generateSouvenirCaption(session.booking.location, session.travelStyle),
-            generatePostcardImage(session.booking.hotelName, session.booking.location, session.travelStyle)
-        ]);
-        
+        const text = await generateSouvenirCaption(session.booking.location, session.travelStyle);
         setCaption(text);
-        setPostcardImage(image);
-        setLoading(false);
-
         localStorage.setItem(captionKey, text);
-        if (image) {
-            await setImageCache(imageKey, image);
-        } else {
-            setImageFailed(true);
-            localStorage.setItem(failedKey, '1');
-        }
+        setImageFailed(true);
+        setLoading(false);
     };
     fetchContent();
   }, [session]);
@@ -76,6 +59,40 @@ const SouvenirStep: React.FC<SouvenirStepProps> = ({ session }) => {
     } else {
         setImageFailed(true);
         localStorage.setItem(failedKey, '1');
+    }
+  };
+
+  const handleSavePhoto = () => {
+    const imageUrl = postcardImage || session.booking.backgroundImage;
+    if (!imageUrl) return;
+    const link = document.createElement('a');
+    link.href = imageUrl;
+    link.download = `hilton-postcard-${session.booking.orderId}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const handleShare = async () => {
+    const imageUrl = postcardImage || session.booking.backgroundImage;
+    if (!imageUrl) return;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${session.booking.hotelName} postcard`,
+          text: caption || `A moment from ${session.booking.location}`,
+          url: imageUrl
+        });
+        return;
+      } catch {
+        // Fall back to clipboard when share is canceled or fails
+      }
+    }
+
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(imageUrl);
+      alert('Link copied to clipboard.');
     }
   };
 
@@ -116,12 +133,6 @@ const SouvenirStep: React.FC<SouvenirStepProps> = ({ session }) => {
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 text-gray-500 z-20">
                         <span className="material-symbols-outlined text-4xl mb-3">image_not_supported</span>
                         <p className="text-xs font-bold uppercase tracking-widest">Image unavailable</p>
-                        <button
-                            onClick={handleRetryImage}
-                            className="mt-4 px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-bold uppercase tracking-wider"
-                        >
-                            Retry Image
-                        </button>
                     </div>
                 ) : (
                     <>
@@ -203,11 +214,30 @@ const SouvenirStep: React.FC<SouvenirStepProps> = ({ session }) => {
         </main>
 
         {/* Footer Actions */}
-        <footer className="px-8 pb-10 pt-4 w-full flex flex-col gap-5 z-30 bg-gradient-to-t from-background-light via-background-light to-transparent">
-             <button className="relative group w-full h-14 overflow-hidden bg-slate-900 hover:bg-black text-white rounded-2xl font-bold text-base flex items-center justify-center gap-3 shadow-xl transition-all active:scale-[0.98]">
-                <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                <span className="material-symbols-outlined relative z-10">download</span>
-                <span className="relative z-10">Save to Photos</span>
+        <footer className="px-8 pb-10 pt-4 w-full flex flex-col gap-4 z-30 bg-gradient-to-t from-background-light via-background-light to-transparent">
+             <div className="flex flex-col sm:flex-row gap-3">
+                 <button
+                     onClick={handleRetryImage}
+                     className="w-full h-12 rounded-2xl border border-slate-200 text-slate-900 font-bold text-sm flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"
+                 >
+                     <span className="material-symbols-outlined text-sm">refresh</span>
+                     <span>{postcardImage ? 'Regenerate Image' : 'Generate Image'}</span>
+                 </button>
+                 <button
+                     className="relative group w-full h-12 overflow-hidden bg-slate-900 hover:bg-black text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-3 shadow-xl transition-all active:scale-[0.98]"
+                     onClick={handleSavePhoto}
+                 >
+                    <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                    <span className="material-symbols-outlined relative z-10">download</span>
+                    <span className="relative z-10">Save to Photos</span>
+                 </button>
+             </div>
+             <button
+                 className="w-full h-12 rounded-2xl border border-slate-200 text-slate-900 font-bold text-sm flex items-center justify-center gap-2 hover:bg-slate-50 transition-all"
+                 onClick={handleShare}
+             >
+                 <span className="material-symbols-outlined text-sm">ios_share</span>
+                 <span>Share</span>
              </button>
         </footer>
     </div>
