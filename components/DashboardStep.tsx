@@ -25,6 +25,7 @@ const DashboardStep: React.FC<DashboardStepProps> = ({ session }) => {
   const [generatedImages, setGeneratedImages] = useState<Record<number, string>>({});
   const [failedImages, setFailedImages] = useState<Record<number, boolean>>({});
   const imageRequestRef = useRef<Set<number>>(new Set());
+  const lastAttractionKeyRef = useRef('');
   
   // Itinerary State
   const [itinerary, setItinerary] = useState<string>('');
@@ -111,6 +112,9 @@ const DashboardStep: React.FC<DashboardStepProps> = ({ session }) => {
   // Trigger Image Generation when `attractions` updates
   useEffect(() => {
     if (attractions.length === 0) return;
+    const attractionKey = attractions.map(attr => attr.id).join('|');
+    if (lastAttractionKeyRef.current === attractionKey) return;
+    lastAttractionKeyRef.current = attractionKey;
 
     const fetchImages = async () => {
         attractions.forEach(async (attr) => {
@@ -119,11 +123,11 @@ const DashboardStep: React.FC<DashboardStepProps> = ({ session }) => {
              if (imageRequestRef.current.has(attr.id)) return;
 
              // Check local cache
-             const cacheKey = `guest-companion:attraction-image:${attr.id}`;
+             const cacheKey = `guest-companion:attraction-image:${session.booking.location}:${attr.type}:${attr.name}`;
              const cached = localStorage.getItem(cacheKey);
              if (cached) {
                  if (cached === 'FAILED') {
-                     const retryKey = `guest-companion:attraction-retry:${attr.id}`;
+                     const retryKey = `guest-companion:attraction-retry:${session.booking.location}:${attr.type}:${attr.name}`;
                      const alreadyRetried = sessionStorage.getItem(retryKey);
                      if (alreadyRetried) {
                          setFailedImages(prev => ({...prev, [attr.id]: true}));
