@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { TravelStyle, Booking, TripStatus, UserSession } from '../types';
 import { validateUser, getTripStatus, PRESET_AVATARS, MOCK_BOOKINGS } from '../services/mockService';
 import { generateAvatar, setGeminiApiKey, setImageApiKey } from '../services/geminiService';
@@ -18,6 +18,7 @@ const LoginStep: React.FC<LoginStepProps> = ({ onLoginSuccess }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [avatar, setAvatar] = useState<string | null>(null);
   const [bookingData, setBookingData] = useState<Booking | null>(null);
+  const avatarRequestRef = useRef<Record<string, boolean>>({});
 
   // Phase 1: Authentication
   const handleFindBooking = () => {
@@ -56,6 +57,11 @@ const LoginStep: React.FC<LoginStepProps> = ({ onLoginSuccess }) => {
       setIsGenerating(false);
       return;
     }
+    if (avatarRequestRef.current[cacheKey]) {
+      setIsGenerating(false);
+      return;
+    }
+    avatarRequestRef.current[cacheKey] = true;
 
     const aiAvatar = await generateAvatar(selectedStyle);
     if (aiAvatar) {
